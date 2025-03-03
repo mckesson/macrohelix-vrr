@@ -50,10 +50,9 @@ namespace VRR_Inbound_File_Generator
             this.lblRequestExecutionID = new System.Windows.Forms.Label();
             this.txtRequestExecutionID = new System.Windows.Forms.TextBox();
             this.chkUseDatabaseValidation = new System.Windows.Forms.CheckBox();
-            this.chkUseDatabaseValidation.CheckedChanged += new System.EventHandler(this.ChkUseDatabaseValidation_CheckedChanged);
             this.btnTestConnection = new System.Windows.Forms.Button();
-            this.btnTestConnection.Click += new System.EventHandler(this.BtnTestConnection_Click);
             this.lblConnectionStatus = new System.Windows.Forms.Label();
+            this.btnFetchOutboundData = new System.Windows.Forms.Button();
             this.SuspendLayout();
             // 
             // lblChainStore
@@ -219,32 +218,45 @@ namespace VRR_Inbound_File_Generator
             this.chkUseDatabaseValidation.TabIndex = 18;
             this.chkUseDatabaseValidation.Text = "Use Database Validation";
             this.chkUseDatabaseValidation.UseVisualStyleBackColor = true;
-            this.chkUseDatabaseValidation.CheckedChanged += new System.EventHandler(this.checkBox1_CheckedChanged);
+            this.chkUseDatabaseValidation.CheckedChanged += new System.EventHandler(this.ChkUseDatabaseValidation_CheckedChanged);
             // 
             // btnTestConnection
             // 
             this.btnTestConnection.AutoSize = true;
-            this.btnTestConnection.Location = new System.Drawing.Point(396, 100);
+            this.btnTestConnection.Location = new System.Drawing.Point(390, 121);
             this.btnTestConnection.Name = "btnTestConnection";
             this.btnTestConnection.Size = new System.Drawing.Size(115, 23);
             this.btnTestConnection.TabIndex = 19;
             this.btnTestConnection.Text = "Test Connection";
             this.btnTestConnection.UseVisualStyleBackColor = true;
+            this.btnTestConnection.Click += new System.EventHandler(this.BtnTestConnection_Click);
             // 
             // lblConnectionStatus
             // 
             this.lblConnectionStatus.AutoSize = true;
-            this.lblConnectionStatus.Location = new System.Drawing.Point(386, 71);
+            this.lblConnectionStatus.Location = new System.Drawing.Point(387, 87);
             this.lblConnectionStatus.Name = "lblConnectionStatus";
             this.lblConnectionStatus.Size = new System.Drawing.Size(147, 13);
             this.lblConnectionStatus.TabIndex = 20;
             this.lblConnectionStatus.Text = "Connection status: Not tested";
+            // 
+            // btnFetchOutboundData
+            // 
+            this.btnFetchOutboundData.AutoSize = true;
+            this.btnFetchOutboundData.Location = new System.Drawing.Point(390, 58);
+            this.btnFetchOutboundData.Name = "btnFetchOutboundData";
+            this.btnFetchOutboundData.Size = new System.Drawing.Size(120, 23);
+            this.btnFetchOutboundData.TabIndex = 21;
+            this.btnFetchOutboundData.Text = "Fetch Outbound Data";
+            this.btnFetchOutboundData.UseVisualStyleBackColor = true;
+            this.btnFetchOutboundData.Click += new System.EventHandler(this.BtnFetchOutboundData_Click);
             // 
             // MainForm
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 13F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
             this.ClientSize = new System.Drawing.Size(584, 321);
+            this.Controls.Add(this.btnFetchOutboundData);
             this.Controls.Add(this.lblConnectionStatus);
             this.Controls.Add(this.btnTestConnection);
             this.Controls.Add(this.chkUseDatabaseValidation);
@@ -298,6 +310,7 @@ namespace VRR_Inbound_File_Generator
         private CheckBox chkUseDatabaseValidation;
         private Button btnTestConnection;
         private Label lblConnectionStatus;
+        private Button btnFetchOutboundData;
     }
 }
 

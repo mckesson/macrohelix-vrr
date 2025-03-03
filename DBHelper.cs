@@ -19,7 +19,20 @@ namespace VRR_Inbound_File_Generator
             _connectionString = connectionString ?? throw new ArgumentNullException(nameof(connectionString));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         }
+        public async Task<DataTable> GetOutboundDataByRequestExecutionIDAsync(string requestExecutionID)
+        {
+            string query = @"
+                SELECT TOP 100 * 
+                FROM architect.vrr.outboundfile
+                WHERE RequestExecutionID = @RequestExecutionID
+                ORDER BY datecreated DESC";
 
+            var parameters = new Dictionary<string, object>
+            {
+                { "@RequestExecutionID", requestExecutionID }
+            };
+            return await ExecuteQueryAsync(query, parameters);
+        }
         public async Task<(bool IsSuccessful, string Message)> TestConnectionAsync()
         {
             try
@@ -74,8 +87,13 @@ namespace VRR_Inbound_File_Generator
 
                     using (var command = new SqlCommand(query, connection))
                     {
-                        AddParameters(command, parameters);
-
+                        if (parameters != null)
+                        {
+                            foreach (var parameter in parameters)
+                            {
+                                command.Parameters.AddWithValue(parameter.Key, parameter.Value);
+                            }
+                        }
                         using (var adapter = new SqlDataAdapter(command))
                         {
                             adapter.Fill(dataTable);

@@ -11,6 +11,7 @@ namespace VRR_Inbound_File_Generator
         private readonly List<string> _errors = new List<string>();
 
         public bool IsValid => _errors.Count == 0;
+        public string Value {  get; set; }
         public void AddError(string message)
         {
             _errors.Add(message);

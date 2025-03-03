@@ -12,7 +12,8 @@ namespace VRR_Inbound_File_Generator
         public string FileNameFormat { get; set; }
         public string DataFilePrefix { get; set; }
         public string TriggerFilePrefix { get; set; }
-
+        public int AccountNumberMin { get; set; }
+        public int AccountNumberMax { get; set; }
     }
 
 }

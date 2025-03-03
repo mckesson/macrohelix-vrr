@@ -34,17 +34,17 @@ namespace VRR_Inbound_File_Generator
         private DatabaseValidator _databaseValidator;
         private ILogger _logger;
         private bool _useDatabaseValidation = true;
-
+        private bool _recordCountManuallySet = false;
         public MainForm()
         {
             InitializeComponent();
+            txtRecordCount.TextChanged += txtRecordCount_TextChanged;
+            InitializeComponents();
             _logger = new FileLogger();
             _logger.LogInfo("Application started");
 
             // Initialize database components
             InitializeDatabase();
-            
-            InitializeComponents();
         }
 
         private void InitializeDatabase()
@@ -54,7 +54,7 @@ namespace VRR_Inbound_File_Generator
                 string connectionString = ConfigurationManager.ConnectionStrings["VRRDatabase"]?.ConnectionString;
                 if (!string.IsNullOrEmpty(connectionString))
                 {
-                    _logger.LogInfo("Initializing daatabase connection");
+                    _logger.LogInfo("Initializing database connection");
                     _dbHelper = new DBHelper(connectionString, _logger);
 
                     // Don't try to connect yet, just initialize the helper
@@ -64,8 +64,8 @@ namespace VRR_Inbound_File_Generator
                     // We'll initialize the validators but won't enable validation until connection is tested
                     _databaseValidator = null;
                     _validationHelper = new ValidationHelper();
-                    chkUseDatabaseValidation.Checked = false;
-                    chkUseDatabaseValidation.Enabled = false;
+                    chkUseDatabaseValidation.Checked = true;
+                    chkUseDatabaseValidation.Enabled = true;
                 }
                 else
                 {
@@ -126,7 +126,7 @@ namespace VRR_Inbound_File_Generator
                 txtRecordCount.Text = "1000";
 
                 //Setup checkbox
-                chkUseDatabaseValidation.Checked = _useDatabaseValidation; 
+                chkUseDatabaseValidation.Checked = true; 
             }
             catch (Exception ex)
             {
@@ -152,7 +152,82 @@ namespace VRR_Inbound_File_Generator
 
             cboReasonCode.SelectedIndex = 0;
         }
-        
+        private async void BtnFetchOutboundData_Click(object sender, EventArgs e)
+        {
+            if (!_useDatabaseValidation || _databaseValidator == null)
+            {
+                MessageBox.Show("Database validation must be enabled to fetch outbound data.",
+                    "Validation Required", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+            string requestExecutionID = txtRequestExecutionID.Text.Trim();
+            if (string.IsNullOrWhiteSpace(requestExecutionID))
+            {
+                MessageBox.Show("Please enter a RequestExecutionID.",
+                    "Input Required", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+            try
+            {
+                btnFetchOutboundData.Enabled = false;
+                btnGenerate.Enabled = false;
+                lblStatus.Text = "Fetching outbound data...";
+                Application.DoEvents();
+
+                var result = await _databaseValidator.FetchOutboundDataAsync(requestExecutionID);
+
+                if (result.success)
+                {
+                    if (result.data.ContainsKey("PID"))
+                    {
+                        txtPID.Text = result.data["PID"].ToString();
+                        txtPID.Enabled = false;
+                    }
+                    if (result.data.ContainsKey("NDC"))
+                    {
+                        txtNDC.Text = result.data["NDC"].ToString();
+                        txtNDC.Enabled = false;
+                    }
+                    if (result.data.ContainsKey("ChainAbbrev"))
+                    {
+                        txtChainStore.Text = result.data["ChainAbbrev"].ToString();
+                    }
+                    if (result.data.ContainsKey("RecordCount"))
+                    {
+                        int recordCount = Convert.ToInt32(result.data["RecordCount"]);
+                        txtRecordCount.Text = recordCount.ToString();
+                    }
+
+                    lblStatus.Text = "Outbound data loaded successfully.";
+                    MessageBox.Show("Outbound data loaded successfully.", "Success",
+                        MessageBoxButtons.OK, MessageBoxIcon.Information);
+                }
+                else
+                {
+                    lblStatus.Text = "Failed to fetch outbound data.";
+                    MessageBox.Show(result.errorMessage, "Error",
+                        MessageBoxButtons.OK, MessageBoxIcon.Error);
+
+                    txtPID.Enabled = true;
+                    txtNDC.Enabled = true;
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError($"Error fetching outbound data: {ex.Message}");
+                lblStatus.Text = "Error fetching outbound data.";
+                MessageBox.Show($"Error fetching outbound data: {ex.Message}",
+                    "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+
+                txtPID.Enabled = true;
+                txtNDC.Enabled = true;
+            }
+            finally
+            {
+                btnFetchOutboundData.Enabled = true;
+                btnGenerate.Enabled = true;
+            }
+        }
         private void BtnBrowse_Click(object sender, EventArgs e)
         {
             using (var folderDialog = new FolderBrowserDialog())
@@ -176,6 +251,7 @@ namespace VRR_Inbound_File_Generator
                 //Debug.WriteLine($"Progress: {progressBar.Value}");
                 btnGenerate.Enabled = false;
                 btnBrowse.Enabled = false;
+                btnFetchOutboundData.Enabled= false;
                 progressBar.Value = 0;
                 lblStatus.Text = "Generating file...";
 
@@ -189,7 +265,22 @@ namespace VRR_Inbound_File_Generator
                     : "00"; // Default reason code
                 int recordCount = int.Parse(txtRecordCount.Text);
                 string outputPath = txtOutputPath.Text;
+                List<Dictionary<string, object>> outboundRecords = null;
+                if (_databaseValidator != null && _useDatabaseValidation)
+                {
+                    var outboundDAtaResult = await _databaseValidator.GetAllOutboundRecordsAsync(requestExecutionID);
+                    if (outboundDAtaResult.success)
+                    {
+                        outboundRecords = outboundDAtaResult.records;
 
+                        // if record count wasn't explicitly changed, use the outbound count
+                        if (outboundRecords.Count > 0 && !_recordCountManuallySet)
+                        {
+                            recordCount = outboundRecords.Count;
+                            txtRecordCount.Text = recordCount.ToString();
+                        }
+                    }
+                }
                 LogMessage($"Initializing FileGenerator with values: ChainAbbrev: {chainAbbrev}, PID: {pid}, NDC: {ndc}, ReasonCode: {reasonCode}, RecordCount: {recordCount}, OutputPath: {outputPath}, RequestExecutionID: {requestExecutionID}");
                 //Generate files
                 _fileGenerator = new FileGenerator(
@@ -201,8 +292,9 @@ namespace VRR_Inbound_File_Generator
                     recordCount,
                     outputPath,
                     _progressTracker,
-                    _databaseValidator,
-                    _logger);
+                    _useDatabaseValidation ? _databaseValidator : null,
+                    _logger,
+                    outboundRecords);
 
                 await _fileGenerator.GenerateFilesAsync();
                 lblStatus.Text = "Files generated successfully";
@@ -218,15 +310,22 @@ namespace VRR_Inbound_File_Generator
             {
                 btnGenerate.Enabled = true;
                 btnBrowse.Enabled = true;
+                btnFetchOutboundData.Enabled = _useDatabaseValidation;
                 //lblStatus.Text = "Ready";
+                if(!_useDatabaseValidation)
+                {
+                    txtPID.Enabled = true;
+                    txtNDC.Enabled = true;
+                }
             }
         }
         private bool ValidateInputs()
         {
-            var reqExecIDResult = _validationHelper.ValidateRequestExecutionID(txtRequestExecutionID.Text);
-            if (!reqExecIDResult.IsValid)
+            var reqExecIDValidation = _validationHelper.ValidateRequestExecutionID(txtRequestExecutionID.Text);
+            if (!reqExecIDValidation.IsValid)
             {
-                MessageBox.Show(reqExecIDResult.GetErrorMessage(), "Validation Error", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                MessageBox.Show(reqExecIDValidation.GetErrorMessage(), "Validation Error", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return false;
             }
             if (string.IsNullOrWhiteSpace(txtOutputPath.Text))
             {
@@ -241,15 +340,18 @@ namespace VRR_Inbound_File_Generator
                 return false;
             }
 
-            if (string.IsNullOrWhiteSpace(txtPID.Text))
+            var pidValidaion = _validationHelper.ValidatePID(txtPID.Text.Trim(), chainAbbrev);
+
+            if (!pidValidaion.IsValid)
             {
                 MessageBox.Show($"Invalid PID for {txtChainStore.Text}.", "Validation Error", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return false;
             }
-            if (!_validationHelper.ValidateNDC(txtNDC.Text).IsValid)
+            var ndcValidation = _validationHelper.ValidateNDC(txtNDC.Text.Replace("-", ""));
+            if (!ndcValidation.IsValid)
             {
                 //MessageBox.Show("Invalid NDC.", "Validation Error", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                //return false;
+                return true;
             }
 
             if (!int.TryParse(txtRecordCount.Text, out int recordCount) || recordCount <= 0 || recordCount > 2000000)
@@ -257,12 +359,17 @@ namespace VRR_Inbound_File_Generator
                 MessageBox.Show("Invalid record count.", "Validation Error", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return false;
             }
+            if (string.IsNullOrWhiteSpace(txtOutputPath.Text))
+            {
+                MessageBox.Show("Output Path cannnot be empty.", "Validation Error", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return false;
+            }
             return true;
         }
         private async Task<bool> ValidateWithDatabaseAsync()
         {
             // Skip if database validation is not available
-            if (_databaseValidator == null)
+            if (_databaseValidator == null || !_useDatabaseValidation)
             {
                 return true;
             }
@@ -316,21 +423,27 @@ namespace VRR_Inbound_File_Generator
             {
                 // Disable the button during test
                 btnTestConnection.Enabled = false;
+                string connectionString = ConfigurationManager.ConnectionStrings["VRRDatabase"]?.ConnectionString;
+                if (string.IsNullOrEmpty(connectionString))
+                {
+                    MessageBox.Show("No connection string found in App.config.", "Connection Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    return;
+                }
+                var dbHelper = new DBHelper(connectionString, _logger);
+                var (isSuccessful, message) = await dbHelper.TestConnectionAsync();
 
-                var (isSuccessful, message) = await _dbHelper.TestConnectionAsync();
                 if (isSuccessful)
                 {
-                    lblConnectionStatus.Text = "Connection successful";
-                    lblConnectionStatus.ForeColor = Color.Green;
+                    MessageBox.Show("Database connection successful", "Connection Test", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 }
                 else
                 {
-                    lblConnectionStatus.Text = $"Connection failed: {message}";
-                    lblConnectionStatus.ForeColor = Color.Red;
+                    MessageBox.Show($"Database connection failed: {message}", "Connection Test", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 }
             }
             catch (Exception ex)
             {
+                MessageBox.Show($"Error testing connection: {ex.Message}", "Connection Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 lblConnectionStatus.Text = $"Error: {ex.Message}";
                 lblConnectionStatus.ForeColor = Color.Red;
                 _logger.LogError($"Error during connection test: {ex.Message}");
@@ -338,95 +451,114 @@ namespace VRR_Inbound_File_Generator
             finally
             {
                 btnTestConnection.Enabled = true;
-                chkUseDatabaseValidation.Checked =true;
             }
         }
         private async void ChkUseDatabaseValidation_CheckedChanged(object sender, EventArgs e)
         {
-            
-            _useDatabaseValidation = chkUseDatabaseValidation.Checked;
-
-            if (_useDatabaseValidation)
+            try
             {
-                if (_dbHelper == null)
+                _useDatabaseValidation = chkUseDatabaseValidation.Checked;
+
+                if (_useDatabaseValidation)
                 {
-                    try
+                    if (_dbHelper == null)
                     {
-                        if (_logger == null)
+                        try
                         {
-                            _logger = new FileLogger();
-                        }
-
-                        // Re-initiating database components
-                        string connectionString = ConfigurationManager.ConnectionStrings["VRRDatabase"]?.ConnectionString;
-                        if (!string.IsNullOrEmpty(connectionString))
-                        {
-                            _logger.LogInfo("Initializing database connection");
-                            _dbHelper = new DBHelper(connectionString, _logger);
-                            var (isSuccessful, message) = await _dbHelper.TestConnectionAsync();
-
-                            if (isSuccessful)
+                            if (_logger == null)
                             {
+                                _logger = new FileLogger();
+                            }
+
+                            // Re-initiating database components
+                            string connectionString = ConfigurationManager.ConnectionStrings["VRRDatabase"]?.ConnectionString;
+                            if (!string.IsNullOrEmpty(connectionString))
+                            {
+                                //_logger.LogInfo("Initializing database connection");
+                                _dbHelper = new DBHelper(connectionString, _logger);
                                 _databaseValidator = new DatabaseValidator(_dbHelper, _logger);
-                                _validationHelper = new ValidationHelper(_databaseValidator);
-                                lblStatus.Text = "Ready (Database Validation Active)";
-                                lblConnectionStatus.Text = "Connection successful";
-                                lblConnectionStatus.ForeColor = Color.Green;
+                                
+                                var (isSuccessful, message) = await _dbHelper.TestConnectionAsync();
+
+                                if (isSuccessful)
+                                {
+                                    _databaseValidator = new DatabaseValidator(_dbHelper, _logger);
+                                    _validationHelper = new ValidationHelper(_databaseValidator);
+                                    lblStatus.Text = "Ready (Database Validation Active)";
+                                    lblConnectionStatus.Text = "Connection successful";
+                                    lblConnectionStatus.ForeColor = Color.Green;
+                                }
+                                else
+                                {
+                                    // Connection failed, disable the checkbox
+                                    chkUseDatabaseValidation.Checked = false;
+                                    _useDatabaseValidation = false;
+                                    lblStatus.Text = "Ready (Basic Validation Only)";
+                                    lblConnectionStatus.ForeColor = Color.Red;
+
+                                    MessageBox.Show($"Database connection failed: {message}\nFalling back to basic validation.",
+                                        "Connection Error", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                                }
+
                             }
                             else
                             {
-                                // Connection failed, disable the checkbox
                                 chkUseDatabaseValidation.Checked = false;
                                 _useDatabaseValidation = false;
                                 lblStatus.Text = "Ready (Basic Validation Only)";
+                                lblConnectionStatus.Text = "No connection string found";
                                 lblConnectionStatus.ForeColor = Color.Red;
-
-                                MessageBox.Show($"Database connection failed: {message}\nFalling back to basic validation.",
-                                    "Connection Error", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                                MessageBox.Show("Connection string not found in config file. Falling back to basic validation.",
+                                    "Configuration Error", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                             }
-
                         }
-                        else
+                        catch (Exception ex)
                         {
+                            _logger.LogError($"Error initializing database connection: {ex.Message}");
                             chkUseDatabaseValidation.Checked = false;
                             _useDatabaseValidation = false;
-                            lblStatus.Text = "Ready (Basic Validation Only)";
-                            lblConnectionStatus.Text = "No connection string found";
+                            lblStatus.Text = "Ready (Basic Validation Only - Error)";
+                            lblConnectionStatus.Text = $"Error: {ex.Message}";
                             lblConnectionStatus.ForeColor = Color.Red;
-                            MessageBox.Show("Connection string not found in config file. Falling back to basic validation.",
-                                "Configuration Error", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+
+                            MessageBox.Show($"Error initializing database connection: {ex.Message}\nFalling back to basic validation.",
+                                "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
                         }
                     }
-                    catch (Exception ex)
+                    else if (_databaseValidator == null)
                     {
-                        _logger.LogError($"Error initializing database connection: {ex.Message}");
-                        chkUseDatabaseValidation.Checked = false;
-                        _useDatabaseValidation = false;
-                        lblStatus.Text = "Ready (Basic Validation Only - Error)";
-                        lblConnectionStatus.Text = $"Error: {ex.Message}";
-                        lblConnectionStatus.ForeColor = Color.Red;
-
-                        MessageBox.Show($"Error initializing database connection: {ex.Message}\nFalling back to basic validation.",
-                            "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                        // Disable database validation
+                        _databaseValidator = new DatabaseValidator(_dbHelper, _logger);
+                        _validationHelper = new ValidationHelper(_databaseValidator);
+                        lblStatus.Text = "Ready (Basic Validation Only)";
                     }
+                    else
+                    {
+                        lblStatus.Text = "Ready (Databse Validation Active)";
+                    }
+                    // Enable the fetch button
+                    btnFetchOutboundData.Enabled = true;
                 }
-                else if (_databaseValidator == null)
-                {
-                    // Disable database validation
-                    _databaseValidator = new DatabaseValidator(_dbHelper, _logger);
-                    _validationHelper = new ValidationHelper(_databaseValidator);
-                    lblStatus.Text = "Ready (Basic Validation Only)";
-                }
-
                 else
                 {
-                    lblStatus.Text = "Ready (Databse Validation Active)";
+                    _databaseValidator = null;
+                    _validationHelper = new ValidationHelper();
+                    lblStatus.Text = "Ready (Basic Validation Only)";
+
+                    // Disable the fetch button and re-enable input fields
+                    btnFetchOutboundData.Enabled = false;
+                    txtPID.Enabled = true;
+                    txtNDC.Enabled= true;
                 }
             }
-            else
+            catch (Exception ex)
             {
+                _logger.LogError($"Error changing validation mode: {ex.Message}");
+                MessageBox.Show($"Error changing validation mode: {ex.Message}", "Error", MessageBoxButtons.OK,MessageBoxIcon.Error);
+
                 _validationHelper = new ValidationHelper();
-                lblStatus.Text = "Ready (Basic Validation Only)";
+                lblStatus.Text = "Ready (Basic Validation Only - Error)";
+                chkUseDatabaseValidation.Checked = false;
             }
         }
 
@@ -447,10 +579,10 @@ namespace VRR_Inbound_File_Generator
                 Debug.WriteLine($"Fsiled to log message: {message}");
             }
         }
-
-        private void checkBox1_CheckedChanged(object sender, EventArgs e)
+        private void txtRecordCount_TextChanged(object sender, EventArgs e)
         {
-
+            // Handle the text changed event here
+            _recordCountManuallySet = true;
         }
     }
 }

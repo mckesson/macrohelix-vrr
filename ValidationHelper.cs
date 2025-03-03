@@ -20,8 +20,8 @@ namespace VRR_Inbound_File_Generator
 
         public ValidationHelper(DatabaseValidator databaseValidator = null)
         {
-            _chainConfigs = LoadChainConfiguration();
             _databaseValidator = databaseValidator;
+            _chainConfigs = LoadChainConfiguration();
         }
         /// <summary>
         /// Validate the Request Execution ID
@@ -35,6 +35,7 @@ namespace VRR_Inbound_File_Generator
             if (string.IsNullOrWhiteSpace(requestExecutionID))
             {
                 result.AddError("Request Execution ID cannot be empty");
+                return result;
             }
             else if(requestExecutionID.Length < 5 || requestExecutionID.Length > 500)
             {
@@ -113,14 +114,54 @@ namespace VRR_Inbound_File_Generator
                 return result;
             }
 
-            ndc = ndc.Replace("-", "").Trim();
+            //ndc = ndc.Replace("-", "").Trim();
 
-            if (!System.Text.RegularExpressions.Regex.IsMatch(ndc, @"^\d{10, 11}$"))
+            //if (!System.Text.RegularExpressions.Regex.IsMatch(ndc, @"^\d{10, 11}$"))
+            //{
+            //    result.AddError("NDC must be 10 or 11 digits");
+            //}
+            return result;
+        }
+
+        public ValidationResult ValidateRecordCount(string recordCountStr)
+        {
+            var result = new ValidationResult();
+
+            if (!int.TryParse(recordCountStr, out int recordCount))
             {
-                result.AddError("NDC must be 10 or 11 digits");
+                result.AddError("Record count must be a valid number");
+                return result;
+            }
+
+            if (recordCount < 0)
+            {
+                result.AddError("Record count cannot be negative");
             }
             return result;
         }
+        public ValidationResult ValidateOutputPath(string outputPath)
+        {
+            var result = new ValidationResult();
+
+            if (string.IsNullOrWhiteSpace(outputPath))
+            {
+                result.AddError("Output path cannot be empty");
+                return result;
+            }
+            return result ;
+        }
+        public ValidationResult ValidateReasonCode(string reasonCode)
+        {
+            var result = new ValidationResult() ;
+            if (string.IsNullOrWhiteSpace(reasonCode))
+            {
+                result.AddError($"{reasonCode} is not valid.");
+                return result;
+            }
+            return result ;
+        }
+
+#region Database Validation Methods
 
         public async Task<ValidationResult> ValidatePIDWithDatabaseAsync(string pid, string chainAbbrev)
         {
@@ -172,6 +213,11 @@ namespace VRR_Inbound_File_Generator
         {
             var basicResult = new ValidationResult();
 
+            if (string.IsNullOrWhiteSpace(hid))
+            {
+                basicResult.AddError("HID cannot be empty");
+                return basicResult;
+            }
             if (_databaseValidator != null)
             {
                 return await _databaseValidator.ValidateHIDAsync(hid, chainAbbrev);
@@ -179,6 +225,47 @@ namespace VRR_Inbound_File_Generator
             return basicResult;
         }
 
+        public async Task<ValidationResult> ValidateUOMWithDatabaseAsync(string uom)
+        {
+            var basicResult = new ValidationResult();
+            if (string.IsNullOrWhiteSpace(uom))
+            {
+                basicResult.AddError("UOM cannot be empty");
+                return basicResult; 
+            }
+            if (_databaseValidator != null)
+            {
+                return await _databaseValidator.ValidateUOMAsync(uom);
+            }
+            return basicResult;
+        }
+
+        public async Task<(bool IsValid, string Value)> GetValidAccountNumberAsync(string chainAbbrev)
+        {
+            if (_databaseValidator == null)
+            {
+                return await _databaseValidator.GetValidAccountNumberAsync(chainAbbrev);
+            }
+            return (false, string.Empty);
+        }
+        public async Task<(bool IsValid, string Value)> GetValidUOMAsync(string pid)
+        {
+            if (_databaseValidator != null)
+            {
+                return await _databaseValidator.GetValidUOMAsync(pid);
+            }
+            return (false, "EA");
+        }
+        public async Task<(bool IsValid, string Status)> GetNDCStatusAsync(string ndc)
+        {
+            if (_databaseValidator != null)
+            {
+                return await _databaseValidator.GetNDCStatusAsync(ndc);
+            }
+            return (false, "A"); // Default to Active if not available
+        }
+        #endregion
+        #region Helper Methods
         public ChainConfiguration GetChainConfig(string chainAbbrev)
         {
             if (string.IsNullOrWhiteSpace(chainAbbrev))
@@ -228,5 +315,6 @@ namespace VRR_Inbound_File_Generator
                 }
             };
         }
+        #endregion
     }
 }
