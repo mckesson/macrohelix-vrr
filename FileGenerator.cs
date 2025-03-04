@@ -8,6 +8,7 @@ using System.IO.Compression;
 using System.Diagnostics;
 using Microsoft.Extensions.Primitives;
 using System.Windows.Forms;
+using System.Security;
 
 namespace VRR_Inbound_File_Generator
 {
@@ -174,7 +175,7 @@ namespace VRR_Inbound_File_Generator
                 using (var bufferesStream = new BufferedStream(fileStream, 262144)) // 256KB buffer
                 using (var writer = new StreamWriter(bufferesStream, Encoding.UTF8, 262144))
                 {
-                    writer.WriteLine("RequestExecutionID    340B_ID    PID    Account_Number    Account_Type    NDC    Total_Pkgs    Contract_Pharmacy_Account_Number    " +
+                    writer.WriteLine("RequestExecutionID    PID    HID    340B_ID    Account_Number    Account_Type    NDC    Total_Pkgs    Contract_Pharmacy_Account_Number    " +
                                             "Credit_Request_Type    Credit_Request_Number    Credit_Request_Line    Credit_Memo_Type    Credit_Memo_PO    Credit_Memo_Number    " +
                                             "Credit_Memo_Line    Material_Number    Material_Description    Retail_Price    Credit_Qty    Reference_Invoice_Number    Reference_Invoice_Line    " +
                                             "Reference_Invoice_Date    Covered_Entity_Account_Number    Debit_Request_Type    Debit_Request_Number    Debit_Request_Line    Debit_Memo_Type    " +
@@ -226,14 +227,14 @@ namespace VRR_Inbound_File_Generator
 
             using (var writer = new StreamWriter(filePath, false, Encoding.UTF8))
             {
-                await writer.WriteLineAsync("Data_Filename|Total_Record_Count|ChainFileAbbrev|ZipFileName");
+                await writer.WriteLineAsync("Data_Filename    Total_Record_Count");
                 int remainingRecords = recordCount;
 
                 
                 foreach (var dataFileName in dataFileNames)
                 {
                     int recordsInThisFile = Math.Min(MAX_RECORDS_PER_FILE, remainingRecords);
-                    await writer.WriteLineAsync($"{dataFileName}    {recordsInThisFile}    {chainAbbrev}    {zipFileName}");
+                    await writer.WriteLineAsync($"{dataFileName}    {recordsInThisFile}");
                     remainingRecords -= recordsInThisFile;
                 }
                 
@@ -305,28 +306,64 @@ namespace VRR_Inbound_File_Generator
                 //Extract values from the record
                 pid = record.ContainsKey("PID") ? record["PID"].ToString() : this.pid.ToString();
                 ndc = record.ContainsKey("NDC") ? record["NDC"].ToString() : this.ndc;
-                hid = record.ContainsKey("HID") ? record["HID"].ToString() : "";
+                hid = record.ContainsKey("HID") ? record["HID"].ToString() : "HID";
                 accountNumber = record.ContainsKey("Account_Number") ? record["Account_Number"].ToString() : "123456";
                 accountType = record.ContainsKey("Account_Type") ? record["Account_Type"].ToString() : "340B";
                 totalPkgs = record.ContainsKey("Total_Pkgs") ? record["Total_Pkgs"].ToString() : GenerateRandomNumber(1, 10).ToString();
 
 
-                
+                string lineContent = $"{requestExecutionID, -36}    " +
+                    $"{pid,-2}    " +
+                    $"{hid,-4}    " +
+                    $"{threeFourtyBID,-9}    " +
+                    $"{accountNumber,-6}    " +
+                    $"{accountType,-3}    "+
+                    $"{ndc,-11}    "+
+                    $"{totalPkgs,-2}    "+
+                    $"{contractPharmacyAccountNumber,-2}    " +
+                    $"{creditRequestType}    "+
+                    $"{creditRequestNumber}    "+
+                    $"{creditRequestLine}    "+
+                    $"{creditMemoType}    "+
+                    $"{creditMemoPO}    "+
+                    $"{creditMemoNumber}    "+
+                    $"{creditMemoLine}    " +
+                    $"{materialNumber}    "+
+                    $"{materialDescription}    "+
+                    $"{materialStatus}    "+
+                    $"{retailPrice}    "+
+                    $"{creditQty}    "+
+                    $"{refInvoiceDate}    "+
+                    $"{contractEntityAcctNum}    " +
+                    $"{debitRequestType}    "+
+                    $"{debitRequestNumber}    "+
+                    $"{debitRequestLine}    "+
+                    $"{debitMemoType}    "+
+                    $"{debitMemoPO}    "+
+                    $"{debitMemoNumber}    "+
+                    $"{ debitMemoLine}    "+
+                    $"{debitQty}    " +
+                    $"{price340B}    "+
+                    $"{DepartmentCode}    "+
+                    $"{ packageUOM}    "+
+                    $"{alternateUOM}    "+
+                    $"{alternateUOMQty}    "+
+                    $"{upcNumber}    "+
+                    $"{ retailWarehouse}    "+
+                    $"{reasonCode}    "+
+                    $"{vrrMessage} \n";
 
-                return $"{requestExecutionID}    {threeFourtyBID}    {pid}    {accountNumber}    {accountType}    {ndc}    {totalPkgs}    {contractPharmacyAccountNumber}" +
-                    $"    {creditRequestType}    {creditRequestNumber}    {creditRequestLine}    {creditMemoType}    {creditMemoPO}    {creditMemoNumber}    {creditMemoLine}    " +
-                    $"{materialNumber}    {materialDescription}    {materialStatus}    {retailPrice}    {creditQty}    {refInvoiceDate}    {contractEntityAcctNum}" +
-                    $"    {debitRequestType}    {debitRequestNumber}    {debitRequestLine}    {debitMemoType}    {debitMemoPO}    {debitMemoNumber}    {debitMemoLine}    {debitQty}    " +
-                    $"{price340B}    {DepartmentCode}    {packageUOM}    {alternateUOM}    {alternateUOMQty}    {upcNumber}    {retailWarehouse}    {reasonCode}    {vrrMessage}";
-
+                return lineContent;
             }
             else
             {
-                return $"{requestExecutionID}    {threeFourtyBID}    {pid}    {accountNumber}    {accountType}    {ndc}    {totalPkgs}    {contractPharmacyAccountNumber}" +
+                string lineContent = $"{requestExecutionID}    {pid}    {hid}    {threeFourtyBID}    {accountNumber}    {accountType}    {ndc}    {totalPkgs}    {contractPharmacyAccountNumber}" +
                     $"    {creditRequestType}    {creditRequestNumber}    {creditRequestLine}    {creditMemoType}    {creditMemoPO}    {creditMemoNumber}    {creditMemoLine}    " +
                     $"{materialNumber}    {materialDescription}    {materialStatus}    {retailPrice}    {creditQty}    {refInvoiceDate}    {contractEntityAcctNum}" +
                     $"    {debitRequestType}    {debitRequestNumber}    {debitRequestLine}    {debitMemoType}    {debitMemoPO}    {debitMemoNumber}    {debitMemoLine}    {debitQty}    " +
                     $"{price340B}    {DepartmentCode}    {packageUOM}    {alternateUOM}    {alternateUOMQty}    {upcNumber}    {retailWarehouse}    {reasonCode}    {vrrMessage}";
+
+                return lineContent;
             }
         }
 

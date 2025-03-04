@@ -104,8 +104,8 @@ namespace VRR_Inbound_File_Generator
             {
                 string query = @"
                     SELECT csg.ChainFileAbbrev
-                    FROM vrr.ChainStoreGroups csg
-                    INNER JOIN vrr.ChainStoreGroupAssignments csga ON csga.CSGID = csg.csgid
+                    FROM Architect.vrr.ChainStoreGroups csg
+                    INNER JOIN Architect.vrr.ChainStoreGroupAssignments csga ON csga.CSGID = csg.csgid
                     WHERE csga.ChainID = @ChainID";
 
                 var parameters = new Dictionary<string, object>
@@ -290,8 +290,8 @@ namespace VRR_Inbound_File_Generator
                     string query = @"
                         SELECT DISTINCT p.HID
                         FROM ArchitectMain.dbo.Pharmacy p
-                        INNER JOIN vrr.ChainStoreGroupAssignments csga ON csga.ChainID = p.ChainID
-                        INNER JOIN vrr.ChainStoreGroups csg ON csg.CSGID = csga.CSGID
+                        INNER JOIN Architect.vrr.ChainStoreGroupAssignments csga ON csga.ChainID = p.ChainID
+                        INNER JOIN Architect.vrr.ChainStoreGroups csg ON csg.CSGID = csga.CSGID
                         WHERE csg.ChainFileAbbrev = @ChainAbbrev
                         AND p.HID IS NOT NULL";
 
