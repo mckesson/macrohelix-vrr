@@ -22,7 +22,7 @@ namespace VRR_Inbound_File_Generator
         public async Task<DataTable> GetOutboundDataByRequestExecutionIDAsync(string requestExecutionID)
         {
             string query = @"
-                SELECT TOP 100 * 
+                SELECT * 
                 FROM architect.vrr.outboundfile
                 WHERE RequestExecutionID = @RequestExecutionID
                 ORDER BY datecreated DESC";
