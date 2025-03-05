@@ -31,7 +31,7 @@ namespace VRR_Inbound_File_Generator
             {
                 { "@RequestExecutionID", requestExecutionID }
             };
-            return await ExecuteQueryAsync(query, parameters);
+            return await ExecuteQueryAsync(query, parameters, 300);
         }
         public async Task<(bool IsSuccessful, string Message)> TestConnectionAsync()
         {
@@ -74,7 +74,7 @@ namespace VRR_Inbound_File_Generator
             }
         }
 
-        public async Task<DataTable> ExecuteQueryAsync(string query, Dictionary<string, object> parameters = null)
+        public async Task<DataTable> ExecuteQueryAsync(string query, Dictionary<string, object> parameters = null, int? commandTimeout = null)
         {
             var dataTable = new DataTable();
 
@@ -87,6 +87,10 @@ namespace VRR_Inbound_File_Generator
 
                     using (var command = new SqlCommand(query, connection))
                     {
+                        if (commandTimeout.HasValue)
+                        {
+                            command.CommandTimeout = commandTimeout.Value;
+                        }
                         if (parameters != null)
                         {
                             foreach (var parameter in parameters)

@@ -35,7 +35,7 @@ namespace VRR_Inbound_File_Generator
                     { "@RequestExecutionID", requestExecutionID }
                 };
 
-                var dataTable = await _dbHelper.ExecuteQueryAsync(query, parameters);
+                var dataTable = await _dbHelper.ExecuteQueryAsync(query, parameters, 300);
                 if (dataTable.Rows.Count == 0)
                 {
                     return (false, null, $"No outbound data found for RequestExecutionID {requestExecutionID}");

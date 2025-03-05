@@ -292,7 +292,7 @@ namespace VRR_Inbound_File_Generator
             var alternateUOMQty = "1";
             var upcNumber = "20231026";
             var retailWarehouse = "9.3";
-            var vrrMessage = reasonCode == "00" ? "Success" : $"Error code {reasonCode}";
+            var vrrMessage = reasonCode == "00" ? "Success" : " ";
             string pid = GenerateRandomNumber(100000, 1000000).ToString();
             string ndc = GenerateRandomNumber(100000, 1000000).ToString();
             string accountNumber = GenerateRandomNumber(100000, 1000000).ToString();
